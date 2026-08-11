@@ -93,7 +93,9 @@ export const studioMessages = {
           label: '字体',
           placeholder: '手动输入字体名',
           preview: '预览',
-          previewText: '印章文字 012345'
+          previewText: '印章文字 012345',
+          refresh: '刷新系统字体',
+          refreshing: '正在读取系统字体…'
         },
         empty: {
           text: '暂无文字元素',
@@ -301,7 +303,9 @@ export const studioMessages = {
           label: 'Font',
           placeholder: 'Enter a font name',
           preview: 'Preview',
-          previewText: 'Stamp Text 012345'
+          previewText: 'Stamp Text 012345',
+          refresh: 'Refresh system fonts',
+          refreshing: 'Loading system fonts…'
         },
         empty: {
           text: 'No text elements',

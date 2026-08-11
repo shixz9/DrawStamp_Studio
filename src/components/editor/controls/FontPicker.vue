@@ -2,7 +2,16 @@
   <div class="font-picker">
     <div class="font-picker-header">
       <span>{{ displayLabel }}</span>
-      <span class="font-current">{{ getFontDisplayName(modelValue) }}</span>
+      <span class="font-header-right">
+        <span class="font-current">{{ getFontDisplayName(modelValue) }}</span>
+        <button
+          type="button"
+          class="font-refresh"
+          :class="{ spinning: refreshing }"
+          :title="refreshing ? t('studio.editor.font.refreshing') : t('studio.editor.font.refresh')"
+          @click="refreshFonts"
+        >⟳</button>
+      </span>
     </div>
 
     <div class="font-quick-list">
@@ -25,14 +34,20 @@
         :value="modelValue"
         @change="updateFont(($event.target as HTMLSelectElement).value)"
       >
-        <option
-          v-for="font in allFonts"
-          :key="font"
-          :value="font"
-          :style="{ fontFamily: getFontCssFamily(font) }"
+        <optgroup
+          v-for="group in groupedFonts"
+          :key="group.category"
+          :label="group.label"
         >
-          {{ getFontDisplayName(font) }}
-        </option>
+          <option
+            v-for="font in group.fonts"
+            :key="font"
+            :value="font"
+            :style="{ fontFamily: getFontCssFamily(font) }"
+          >
+            {{ getFontDisplayName(font) }}
+          </option>
+        </optgroup>
       </select>
       <input
         class="font-input"
@@ -58,7 +73,9 @@ import {
   getFontDisplayName,
   getCanonicalFontName,
   getFontCssFamily,
-  getRecommendedStampFonts
+  getRecommendedStampFonts,
+  groupFontsByCategory,
+  refreshSystemFonts
 } from '../../../utils/fontUtils'
 
 const props = defineProps<{
@@ -116,9 +133,11 @@ function saveRecentFont(font: string) {
 }
 
 const allFonts = computed(() => {
-  const merged = [...recentFonts.value, ...compactFontOptions, ...getRecommendedStampFonts(), props.modelValue]
+  const merged = [...props.fonts, ...recentFonts.value, ...compactFontOptions, ...getRecommendedStampFonts(), props.modelValue]
   return Array.from(new Set(merged.filter(Boolean)))
 })
+
+const groupedFonts = computed(() => groupFontsByCategory(allFonts.value))
 
 const quickFonts = computed(() => {
   const available = new Set(allFonts.value)
@@ -130,6 +149,17 @@ const updateFont = (font: string) => {
   const canonicalFont = getCanonicalFontName(font)
   saveRecentFont(canonicalFont)
   emit('update:modelValue', canonicalFont)
+}
+
+const refreshing = ref(false)
+const refreshFonts = async () => {
+  if (refreshing.value) return
+  refreshing.value = true
+  try {
+    await refreshSystemFonts()
+  } finally {
+    refreshing.value = false
+  }
 }
 
 const inputFont = (font: string) => {
@@ -169,6 +199,43 @@ const inputFont = (font: string) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.font-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.font-refresh {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #d8e0ea;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #7a8495;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.font-refresh:hover {
+  border-color: var(--studio-ui-red);
+  color: var(--studio-ui-red);
+}
+
+.font-refresh.spinning {
+  animation: font-refresh-spin 0.9s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes font-refresh-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .font-quick-list {

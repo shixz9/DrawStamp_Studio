@@ -1,5 +1,6 @@
-const fontAliases: Record<string, string> = {
-  '华文隶书': 'STLiti',
+import { LOCAL_FONT_CANDIDATES, LOCAL_FONT_DISPLAY_NAMES } from './localFontCandidates'
+
+const fontAliases: Record<string, string> = {  '华文隶书': 'STLiti',
   '隶书': 'LiSu',
   '隶书 (GB2312)': 'SimLi',
   '隶书 GB2312': 'SimLi',
@@ -90,6 +91,9 @@ export async function ensureStampFontsLoaded(): Promise<void> {
 // 字体名称映射：英文字体名称 -> 中文显示名称
 export function getFontDisplayName(fontName: string): string {
   const canonicalName = getCanonicalFontName(fontName)
+  // 本机字体别名(PostScript/拉丁名) -> 首选中文名
+  const localDisplay = LOCAL_FONT_DISPLAY_NAMES[canonicalName] || LOCAL_FONT_DISPLAY_NAMES[fontName]
+  if (localDisplay) return localDisplay
   const fontNameMap: Record<string, string> = {
     // GB2312 国标字体
     'SimSun': '宋体 (GB2312)',
@@ -104,6 +108,38 @@ export function getFontDisplayName(fontName: string): string {
     'Kaiti SC': '楷体-简',
     'Heiti SC': '黑体-简',
     'PingFang SC': '苹方-简',
+    'PingFang TC': '苹方-繁',
+    'PingFang HK': '苹方-港',
+    'Songti TC': '宋体-繁',
+    'Kaiti TC': '楷体-繁',
+    'Heiti TC': '黑体-繁',
+    'Yuanti SC': '圆体-简',
+    'Yuanti TC': '圆体-繁',
+    'Xingkai SC': '行楷-简',
+    'Xingkai TC': '行楷-繁',
+    'Baoli SC': '报隶-简',
+    'Weibei SC': '魏碑-简',
+    'Weibei TC': '魏碑-繁',
+    'Libian SC': '隶变-简',
+    'Libian TC': '隶变-繁',
+    'Wawati SC': '娃娃体-简',
+    'Wawati TC': '娃娃体-繁',
+    'Lantinghei SC': '兰亭黑-简',
+    'Lantinghei TC': '兰亭黑-繁',
+    'Hannotate SC': '手札体-简',
+    'Hannotate TC': '手札体-繁',
+    'HanziPen SC': '翩翩体-简',
+    'HanziPen TC': '翩翩体-繁',
+    'Yuppy SC': '雅痞-简',
+    'Yuppy TC': '雅痞-繁',
+    'Hiragino Sans': '冬青黑体',
+    'Hiragino Mincho ProN': '冬青明朝',
+    'Hiragino Kaku Gothic ProN': '冬青角黑',
+    'Hiragino Maru Gothic ProN': '冬青丸黑',
+    'Apple LiGothic': '苹果俪中黑',
+    'Apple LiSung': '苹果俪细宋',
+    'LiHei Pro': '俪黑 Pro',
+    'LiSong Pro': '俪宋 Pro',
     'Hiragino Sans GB': '冬青黑体简体中文',
     
     // 常用中文字体
@@ -219,11 +255,13 @@ export function getFontCategory(fontName: string): FontCategory {
   const canonicalName = getCanonicalFontName(fontName)
   const displayName = getFontDisplayName(canonicalName)
   const lowerName = `${canonicalName} ${displayName}`.toLowerCase()
-  if (/lisu|liti|xingkai|xinwei|zhuan|shuti|yaoti|隶书|行楷|新魏|篆|舒体|姚体/i.test(`${canonicalName} ${displayName}`)) return 'stamp'
-  if (/song|simsun|serif|ming/i.test(lowerName)) return 'song'
-  if (/hei|sans|yahei|pingfang|dengxian|helvetica|arial/i.test(lowerName)) return 'hei'
-  if (/kai|fangsong|fang/i.test(lowerName)) return 'kai'
+  if (/lisu|liti|xingkai|xinwei|zhuan|shuti|yaoti|weibei|baoli|libian|隶书|行楷|新魏|篆|舒体|姚体|魏碑|报隶|隶变|隶|金文|瘦金|行书|草书|黄草|章草/i.test(`${canonicalName} ${displayName}`)) return 'stamp'
+  if (/song|simsun|serif|ming|sung|mincho|宋|明/i.test(lowerName)) return 'song'
+  if (/hei|sans|yahei|pingfang|dengxian|helvetica|arial|gothic|yuanti|黑|圆/i.test(lowerName)) return 'hei'
+  if (/kai|fangsong|fang|wawati|hannotate|hanzipen|yuppy|楷|仿宋|娃娃|手札|翩翩|雅痞|丫丫|钢笔|毛笔|签名|手写/i.test(lowerName)) return 'kai'
   if (/times|courier|verdana|georgia|tahoma|impact|garamond|bookman|century|franklin/i.test(lowerName)) return 'english'
+  // 纯 ASCII 名称默认归入英文/数字
+  if (/^[\x20-\x7E]+$/.test(canonicalName)) return 'english'
   return 'system'
 }
 
@@ -352,64 +390,203 @@ function getChineseFonts(): string[] {
   ];
 }
 
-export async function getSystemFonts(): Promise<string[]> {
-  try {
-    // 获取常用中文字体列表
-    const chineseFonts = getChineseFonts();
-    
-    // 使用 FontFace API 获取可用字体
-    // @ts-ignore
-    if (window.queryLocalFonts) {
-      // @ts-ignore
-      const availableFonts = await window.queryLocalFonts();
-      const systemFonts: string[] = Array.from(new Set(availableFonts.map((font: any) => String(font.family))));
-      // 合并系统字体和常用中文字体，确保中文字体可用
-      const allFonts: string[] = Array.from(new Set([...chineseFonts, ...systemFonts]));
-      return allFonts.sort();
-    } else {
-      // 降级方案：返回常用中文字体列表 + 常用英文字体
-      return [
-        ...chineseFonts,
-        // 常用英文字体
-        'Arial',
-        'Times New Roman',
-        'Helvetica',
-        'Courier New',
-        'Verdana',
-        'Georgia',
-        'Tahoma',
-        'Trebuchet MS',
-        'Comic Sans MS',
-        'Impact',
-        'Lucida Console',
-        'Lucida Sans Unicode',
-        'Palatino Linotype',
-        'Garamond',
-        'Bookman Old Style',
-        'Century Gothic',
-        'Franklin Gothic Medium'
-      ];
+// macOS 系统自带中文字体（/System/Library/Fonts 与 /Library/Fonts）
+function getMacOSChineseFonts(): string[] {
+  return [
+    'PingFang SC', // 苹方-简
+    'PingFang TC', // 苹方-繁
+    'PingFang HK', // 苹方-港
+    'Songti SC', // 宋体-简
+    'Songti TC', // 宋体-繁
+    'Kaiti SC', // 楷体-简
+    'Kaiti TC', // 楷体-繁
+    'Heiti SC', // 黑体-简
+    'Heiti TC', // 黑体-繁
+    'Yuanti SC', // 圆体-简
+    'Yuanti TC', // 圆体-繁
+    'Xingkai SC', // 行楷-简
+    'Xingkai TC', // 行楷-繁
+    'Baoli SC', // 报隶-简
+    'Weibei SC', // 魏碑-简
+    'Weibei TC', // 魏碑-繁
+    'Libian SC', // 隶变-简
+    'Libian TC', // 隶变-繁
+    'Wawati SC', // 娃娃体-简
+    'Wawati TC', // 娃娃体-繁
+    'Lantinghei SC', // 兰亭黑-简
+    'Lantinghei TC', // 兰亭黑-繁
+    'Hannotate SC', // 手札体-简
+    'Hannotate TC', // 手札体-繁
+    'HanziPen SC', // 翩翩体-简
+    'HanziPen TC', // 翩翩体-繁
+    'Yuppy SC', // 雅痞-简
+    'Yuppy TC', // 雅痞-繁
+    'Hiragino Sans', // 冬青黑体
+    'Hiragino Sans GB', // 冬青黑体简体中文
+    'Hiragino Mincho ProN', // 冬青明朝
+    'Hiragino Kaku Gothic ProN', // 冬青角黑
+    'Hiragino Maru Gothic ProN', // 冬青丸黑
+    'Apple LiGothic', // 苹果俪中黑
+    'Apple LiSung', // 苹果俪细宋
+    'LiHei Pro', // 俪黑 Pro
+    'LiSong Pro', // 俪宋 Pro
+    'BiauKai', // 标楷体
+    'PMingLiU', // 新细明体
+    'MingLiU', // 细明体
+    'Hei', // 黑体（旧）
+    'Kai' // 楷体（旧）
+  ]
+}
+
+// macOS 常见英文/数字字体
+function getMacOSLatinFonts(): string[] {
+  return [
+    'Helvetica Neue',
+    'Helvetica',
+    'Arial',
+    'Arial Narrow',
+    'Arial Rounded MT Bold',
+    'Avenir',
+    'Avenir Next',
+    'Futura',
+    'Menlo',
+    'Monaco',
+    'Geneva',
+    'Optima',
+    'Didot',
+    'Baskerville',
+    'Cochin',
+    'Copperplate',
+    'Gill Sans',
+    'Hoefler Text',
+    'Lucida Grande',
+    'Marker Felt',
+    'Palatino',
+    'Papyrus',
+    'Savoye LET',
+    'Snell Roundhand',
+    'American Typewriter',
+    'Andale Mono',
+    'Courier',
+    'Courier New',
+    'Times',
+    'Times New Roman',
+    'Georgia',
+    'Verdana',
+    'Tahoma',
+    'Trebuchet MS',
+    'Impact',
+    'Comic Sans MS',
+    'Chalkboard SE',
+    'Chalkduster',
+    'Noteworthy',
+    'Bradley Hand',
+    'Zapfino'
+  ]
+}
+
+// 通过 canvas 测量文本宽度判断字体是否真实安装在系统中
+// 分片执行避免一次性阻塞主线程(上千候选时单次全量测量可达秒级)
+async function detectAvailableFonts(candidates: string[]): Promise<string[]> {
+  if (typeof document === 'undefined') return []
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d')
+  if (!context) return []
+
+  const baselines = ['monospace', 'sans-serif', 'serif'] as const
+  const testText = 'mmmmmmmmmmlliWwQq@#印章测试三国统一隶书楷体0123456789'
+  const fontSize = 72
+
+  const baselineWidths = baselines.map(baseline => {
+    context.font = `${fontSize}px ${baseline}`
+    return context.measureText(testText).width
+  })
+
+  const available: string[] = []
+  const CHUNK = 120
+  for (let start = 0; start < candidates.length; start += CHUNK) {
+    for (const fontName of candidates.slice(start, start + CHUNK)) {
+      const family = fontName.replace(/"/g, '')
+      // 大多数字体第一个基线就能区分,失败才继续测其余基线
+      for (let i = 0; i < baselines.length; i++) {
+        context.font = `${fontSize}px "${family}", ${baselines[i]}`
+        if (Math.abs(context.measureText(testText).width - baselineWidths[i]) > 0.01) {
+          available.push(fontName)
+          break
+        }
+      }
     }
-  } catch (error) {
-    console.error('获取系统字体失败:', error);
-    // 返回最常用的中文字体和英文字体
-    return [
-      // GB2312 国标字体
-      'SimSun', // 宋体 (GB2312)
-      'SimHei', // 黑体 (GB2312)
-      'KaiTi_GB2312', // 楷体_GB2312
-      'FangSong_GB2312', // 仿宋_GB2312
-      // 常用中文字体
-      'Microsoft YaHei', // 微软雅黑
-      'KaiTi', // 楷体
-      'FangSong', // 仿宋
-      'STHeiti', // 华文黑体
-      'STKaiti', // 华文楷体
-      'STSong', // 华文宋体
-      // 常用英文字体
-      'Arial',
-      'Times New Roman',
-      'Helvetica'
-    ];
+    if (start + CHUNK < candidates.length) {
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
   }
-} 
+  return available
+}
+
+let systemFontsCache: string[] | null = null
+let systemFontsInflight: Promise<string[]> | null = null
+
+export async function getSystemFonts(): Promise<string[]> {
+  if (systemFontsCache) return systemFontsCache
+  if (systemFontsInflight) return systemFontsInflight
+
+  systemFontsInflight = (async () => {
+    const detected = new Set<string>()
+    try {
+      // 1. canvas 探测：所有浏览器可用，无需权限，覆盖 macOS 常见字体与国标字体
+      const candidates = Array.from(new Set([
+        ...getChineseFonts(),
+        ...getMacOSChineseFonts(),
+        ...getMacOSLatinFonts(),
+        ...LOCAL_FONT_CANDIDATES
+      ]))
+      ;(await detectAvailableFonts(candidates)).forEach(font => detected.add(font))
+
+      // 2. Local Font Access API（Chrome/Edge）：拿到完整系统字体家族列表
+      // @ts-ignore
+      if (typeof window !== 'undefined' && window.queryLocalFonts) {
+        try {
+          // @ts-ignore
+          const localFonts = await window.queryLocalFonts()
+          localFonts.forEach((font: any) => detected.add(String(font.family)))
+        } catch {
+          // 用户拒绝授权或环境不支持时，保留 canvas 探测结果
+        }
+      }
+    } catch (error) {
+      console.error('获取系统字体失败:', error)
+    }
+
+    // 保证印章推荐字体始终可选（内置打包 STLiti 等）
+    getRecommendedStampFonts().forEach(font => detected.add(font))
+
+    // 同一字体可能命中多个名称变体(中文名/拉丁别名/PS名),按显示名去重
+    const byDisplay = new Map<string, string>()
+    Array.from(detected)
+      .filter(Boolean)
+      .sort((a, b) => getFontDisplayName(a).localeCompare(getFontDisplayName(b), 'zh-Hans-CN'))
+      .forEach(name => {
+        const display = getFontDisplayName(name)
+        // 优先保留与显示名一致的条目,其次是先遇到的别名
+        if (!byDisplay.has(display) || name === display) {
+          byDisplay.set(display, name)
+        }
+      })
+    const result = Array.from(byDisplay.values())
+    systemFontsCache = result
+    systemFontsInflight = null
+    return result
+  })()
+
+  return systemFontsInflight
+}
+
+// 清除缓存并重新枚举（用于用户授权 local-fonts 权限后刷新）
+export async function refreshSystemFonts(): Promise<string[]> {
+  systemFontsCache = null
+  const fonts = await getSystemFonts()
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<string[]>('drawstamp:system-fonts-changed', { detail: fonts }))
+  }
+  return fonts
+}

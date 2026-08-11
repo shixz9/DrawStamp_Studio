@@ -125,7 +125,7 @@
     </div>
   </template>
   <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
   import {DrawStampUtils} from './DrawStampUtils'
 import { ICompany, IDrawStampConfig, IInnerCircle, IStampType } from './DrawStampTypes'
   import { useI18n } from 'vue-i18n'
@@ -144,6 +144,7 @@ import InnerCircleSettingsPanel from './components/editor/panels/InnerCircleSett
 import LineSettingsPanel from './components/editor/panels/LineSettingsPanel.vue'
 import SvgSettingsPanel from './components/editor/panels/SvgSettingsPanel.vue'
 import { DEFAULT_STAMP_RED } from './Constants'
+import { getSystemFonts } from './utils/fontUtils'
 
   const { t } = useI18n()
 
@@ -535,17 +536,31 @@ const handleLineConfigUpdate = (updater: (config: IDrawStampConfig) => void) => 
 
   const systemFonts = ref<string[]>([])
 
+  const handleSystemFontsChanged = (event: Event) => {
+    const detail = (event as CustomEvent<string[]>).detail
+    if (Array.isArray(detail) && detail.length > 0) {
+      systemFonts.value = detail
+    }
+  }
+
   // 在组件挂载时加载字体
   onMounted(async () => {
     restoreDrawConfigs()
     drawStamp()
     loadPresetsFromLocalStorage()
+    window.addEventListener('drawstamp:system-fonts-changed', handleSystemFontsChanged)
+    // 连接系统字体库，填充字体选择器
+    systemFonts.value = await getSystemFonts()
     // 初始化所有字体选择器的预览
     document.querySelectorAll('.font-select, .font-input').forEach((element) => {
       if (element instanceof HTMLElement) {
         updateFontPreview({ target: element } as unknown as Event);
       }
     });
+  })
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('drawstamp:system-fonts-changed', handleSystemFontsChanged)
   })
 
   // 监听所有响应式数据的变化
